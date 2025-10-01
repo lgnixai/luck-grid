@@ -476,7 +476,7 @@ export const InteractionLayerBase: ForwardRefRenderFunction<
               }
 
               if (type === CellRegionType.ToggleEditing) {
-                return setEditing(true);
+                return requestAnimationFrame(() => setEditing(true));
               }
             }
           );
@@ -507,22 +507,40 @@ export const InteractionLayerBase: ForwardRefRenderFunction<
   };
 
   const onDblClick = () => {
+    // Prefer current selection/activeCell to avoid mouse hit-test races
+    // 1) Column header resizing/autofit via column selection
+    if (selection.type === SelectionRegionType.Columns && selectionRanges.length > 0) {
+      const [startCol, endCol] = selectionRanges[0];
+      if (startCol === endCol) {
+        return onColumnHeaderDblClick?.(startCol, {
+          x: coordInstance.getColumnRelativeOffset(startCol, scrollLeft),
+          y: 0,
+          width: coordInstance.getColumnWidth(startCol),
+          height: columnHeadHeight,
+        });
+      }
+    }
+
+    // 2) Cell editing via active cell (must match selection)
+    if (isCellSelection && activeCell) {
+      const [col, realRow] = activeCell;
+      const cell = getCellContent([col, realRow]) as IInnerCell;
+      if (cell.readonly) return onCellDblClick?.([col, realRow]);
+      editorContainerRef.current?.focus?.();
+      return requestAnimationFrame(() => setEditing(true));
+    }
+
+    // 3) Fallback to mouse hit only if no valid selection present (kept for completeness)
     const mouseState = getMouseState();
     const { type, rowIndex, columnIndex } = mouseState;
     const { realIndex } = getLinearRow(rowIndex);
-    if (
-      [RegionType.Cell, RegionType.ActiveCell].includes(type) &&
-      isEqual(selectionRanges[0], [columnIndex, realIndex])
-    ) {
+    if ([RegionType.Cell, RegionType.ActiveCell].includes(type)) {
       const cell = getCellContent([columnIndex, realIndex]) as IInnerCell;
       if (cell.readonly) return onCellDblClick?.([columnIndex, realIndex]);
       editorContainerRef.current?.focus?.();
-      return setEditing(true);
+      return requestAnimationFrame(() => setEditing(true));
     }
-    if (
-      type === RegionType.ColumnHeader &&
-      isEqual(selectionRanges[0], [columnIndex, columnIndex])
-    ) {
+    if (type === RegionType.ColumnHeader) {
       return onColumnHeaderDblClick?.(columnIndex, {
         x: coordInstance.getColumnRelativeOffset(columnIndex, scrollLeft),
         y: 0,
@@ -736,6 +754,8 @@ export const InteractionLayerBase: ForwardRefRenderFunction<
         width,
         height,
         cursor,
+        top: 0,
+        left: 0,
       }}
       className="absolute"
     >
