@@ -281,7 +281,10 @@ export const EditorContainerBase: ForwardRefRenderFunction<
     if (!activeCell || isEditing) return;
     if (!isPrintableKey(event.nativeEvent)) return;
     if (NO_EDITING_CELL_TYPES.has(cellType)) return;
-    setEditing(true);
+    // Use requestAnimationFrame to ensure editor positioning happens after state updates
+    requestAnimationFrame(() => {
+      setEditing(true);
+    });
     editorRef.current?.setValue?.(null);
   };
 

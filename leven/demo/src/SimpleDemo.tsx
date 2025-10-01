@@ -407,46 +407,55 @@ Canvas: ${document.querySelector('canvas') ? '✅ 存在' : '❌ 不存在'}`
               return
             }
 
-            // 选取一个稳定的文本单元格：列0("name")，行5
-            const target: [number, number] = [0, 5]
+            // 选取一个稳定的文本单元格：列1("email")，行5
+            const target: [number, number] = [1, 5]
+            
+            // 首先滚动到目标单元格
             grid.scrollToItem(target)
-            // 主动设置活动单元格与选择
-            grid.setActiveCell?.(target)
-            grid.setSelection?.({ set: (t: any, rr: any) => rr } as any) // 占位以避免类型检查，这行不会真正生效
-            // 通过回车键进入编辑（与 useKeyboardSelection 保持一致）
-            await new Promise(r => requestAnimationFrame(r))
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-            await new Promise(r => setTimeout(r, 120))
-            // 主动设置活动单元格，避免必须先单击
-            grid.setActiveCell?.(target)
+            await new Promise(r => setTimeout(r, 100))
+            
+            // 设置活动单元格
+            grid.setActiveCell(target)
+            await new Promise(r => setTimeout(r, 100))
 
-            // 取得单元格边界（已是相对容器的坐标）
+            // 获取单元格边界（用于验证）
             const expectBounds = grid.getCellBounds(target)
             if (!expectBounds) {
               setDebugInfo('❌ 无法获取目标单元格边界')
               return
             }
 
-            // 记录命中的列/行（以容器为相对坐标）
-            const relX = expectBounds.x + expectBounds.width / 2 - 2
-            const relY = expectBounds.y + expectBounds.height / 2 - 2
-            const hit = grid.getCellIndicesAtPosition?.(relX, relY) || null
-
-            // 循环等待编辑器渲染（最多 2 秒）
-            const waitForEditor = async (): Promise<HTMLElement | null> => {
-              for (let i = 0; i < 40; i++) {
-                const editorContainer = container.querySelector('[id^="editor-container"]')
-                const absDivs = editorContainer?.querySelectorAll('div[style*="position: absolute"]') as NodeListOf<HTMLElement> | undefined
-                const editor = absDivs && absDivs[absDivs.length - 1]
-                if (editor) return editor
-                await new Promise(r => setTimeout(r, 50))
-              }
-              return null
+            // 模拟双击进入编辑
+            const canvas = container.querySelector('canvas')
+            if (!canvas) {
+              setDebugInfo('❌ 未找到Canvas元素')
+              return
             }
+            
+            const canvasRect = canvas.getBoundingClientRect()
+            const clickX = canvasRect.left + expectBounds.x + expectBounds.width / 2
+            const clickY = canvasRect.top + expectBounds.y + expectBounds.height / 2
+            
+            // 触发双击事件
+            const dblClickEvent = new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              clientX: clickX,
+              clientY: clickY,
+              detail: 2
+            })
+            canvas.dispatchEvent(dblClickEvent)
+            
+            // 等待编辑器渲染
+            await new Promise(r => setTimeout(r, 200))
 
-            const editor = await waitForEditor()
+            // 查找编辑器元素
+            const editorContainer = container.querySelector('[id^="editor-container"]')
+            const absDivs = editorContainer?.querySelectorAll('div[style*="position: absolute"]') as NodeListOf<HTMLElement> | undefined
+            const editor = absDivs && absDivs.length > 1 ? absDivs[1] : null
+            
             if (!editor) {
-              setDebugInfo('❌ 未找到编辑器DOM')
+              setDebugInfo('❌ 未找到编辑器DOM（可能未进入编辑状态）')
               return
             }
 
@@ -464,16 +473,28 @@ Canvas: ${document.querySelector('canvas') ? '✅ 存在' : '❌ 不存在'}`
 
             const pass = passTop && passLeft && passW && passH
 
-            const report = `自动验证结果: ${pass ? '✅ 通过' : '❌ 未通过'}\n` +
-              `命中: col=${hit ? hit[0] : 'NA'}, row=${hit ? hit[1] : 'NA'}\n\n` +
-              `期望: top=${expectBounds.y}, left=${expectBounds.x}, width=${expectBounds.width}, height=${expectBounds.height}\n` +
-              `实际: top=${actualTop}, left=${actualLeft}, width=${actualWidth}, height=${actualHeight}\n` +
-              `误差(px): top=${(actualTop - expectBounds.y).toFixed(1)}, left=${(actualLeft - expectBounds.x).toFixed(1)}, ` +
-              `width=${(actualWidth - expectBounds.width).toFixed(1)}, height=${(actualHeight - expectBounds.height).toFixed(1)}`
+            // 获取命中位置
+            const hit = grid.getCellIndicesAtPosition?.(expectBounds.x + 5, expectBounds.y + 5) || null
+
+            const report = `=== 自动验证结果 ===\n\n` +
+              `测试单元格: 列${target[0]}, 行${target[1]}\n` +
+              `命中检测: col=${hit ? hit[0] : 'NA'}, row=${hit ? hit[1] : 'NA'} ${hit && hit[0] === target[0] && hit[1] === target[1] ? '✅' : '❌'}\n\n` +
+              `期望位置:\n` +
+              `  top=${expectBounds.y.toFixed(1)}, left=${expectBounds.x.toFixed(1)}\n` +
+              `  width=${expectBounds.width.toFixed(1)}, height=${expectBounds.height.toFixed(1)}\n\n` +
+              `实际位置:\n` +
+              `  top=${actualTop.toFixed(1)}, left=${actualLeft.toFixed(1)}\n` +
+              `  width=${actualWidth.toFixed(1)}, height=${actualHeight.toFixed(1)}\n\n` +
+              `误差(px):\n` +
+              `  top: ${(actualTop - expectBounds.y).toFixed(1)} ${passTop ? '✅' : '❌'}\n` +
+              `  left: ${(actualLeft - expectBounds.x).toFixed(1)} ${passLeft ? '✅' : '❌'}\n` +
+              `  width: ${(actualWidth - expectBounds.width).toFixed(1)} ${passW ? '✅' : '❌'}\n` +
+              `  height: ${(actualHeight - expectBounds.height).toFixed(1)} ${passH ? '✅' : '❌'}\n\n` +
+              `最终结果: ${pass ? '✅ 全部通过' : '❌ 存在偏差'}`
 
             setDebugInfo(report)
           } catch (err) {
-            setDebugInfo(`❌ 自动验证异常: ${(err as Error).message}`)
+            setDebugInfo(`❌ 自动验证异常: ${(err as Error).message}\n${(err as Error).stack}`)
           }
         }}
       >
@@ -484,7 +505,7 @@ Canvas: ${document.querySelector('canvas') ? '✅ 存在' : '❌ 不存在'}`
 
   return (
     <div className="h-full w-full flex flex-col bg-white">
-      
+      {toolbar}
       
       {/* 调试信息显示 */}
       {debugInfo && (

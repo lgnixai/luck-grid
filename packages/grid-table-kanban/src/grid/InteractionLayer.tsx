@@ -476,7 +476,10 @@ export const InteractionLayerBase: ForwardRefRenderFunction<
               }
 
               if (type === CellRegionType.ToggleEditing) {
-                return setEditing(true);
+                // Use requestAnimationFrame to ensure editor positioning happens after state updates
+                return requestAnimationFrame(() => {
+                  setEditing(true);
+                });
               }
             }
           );
@@ -517,7 +520,11 @@ export const InteractionLayerBase: ForwardRefRenderFunction<
       const cell = getCellContent([columnIndex, realIndex]) as IInnerCell;
       if (cell.readonly) return onCellDblClick?.([columnIndex, realIndex]);
       editorContainerRef.current?.focus?.();
-      return setEditing(true);
+      // Use requestAnimationFrame to ensure editor positioning happens after state updates
+      requestAnimationFrame(() => {
+        setEditing(true);
+      });
+      return;
     }
     if (
       type === RegionType.ColumnHeader &&
