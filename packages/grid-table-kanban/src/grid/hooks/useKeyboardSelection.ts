@@ -174,7 +174,11 @@ export const useKeyboardSelection = (props: ISelectionKeyboardProps) => {
     ['delete', 'backspace', 'f2'],
     () => {
       if (isHotkeyPressed('f2')) {
-        return setEditing(true);
+        // Use requestAnimationFrame to ensure editor positioning happens after state updates
+        requestAnimationFrame(() => {
+          setEditing(true);
+        });
+        return;
       }
       if (isHotkeyPressed('backspace') || isHotkeyPressed('delete')) {
         return onDelete?.(selection);
@@ -208,7 +212,10 @@ export const useKeyboardSelection = (props: ISelectionKeyboardProps) => {
           scrollToItem(newRange as IRange);
         });
       } else {
-        setEditing(true);
+        // Use requestAnimationFrame to ensure editor positioning happens after state updates
+        requestAnimationFrame(() => {
+          setEditing(true);
+        });
       }
     },
     {

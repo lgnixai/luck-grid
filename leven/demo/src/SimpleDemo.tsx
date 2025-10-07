@@ -505,7 +505,7 @@ Canvas: ${document.querySelector('canvas') ? '✅ 存在' : '❌ 不存在'}`
 
   return (
     <div className="h-full w-full flex flex-col bg-white">
-      
+      {toolbar}
       
       {/* 调试信息显示 */}
       {debugInfo && (
